@@ -13,6 +13,7 @@ import {
   Eye,
   ArrowRight,
   Calendar,
+  AlertTriangle,
 } from 'lucide-react';
 import { useAppStore } from '@/store';
 import { useNavigate } from 'react-router-dom';
@@ -46,11 +47,18 @@ function formatDateTimeLocal(date: Date) {
 
 type Step = 'fill' | 'review';
 
+interface RiskWarning {
+  level: 'high' | 'medium';
+  title: string;
+  description: string;
+}
+
 export default function RegistrationForm() {
   const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [step, setStep] = useState<Step>('fill');
+  const [riskConfirmed, setRiskConfirmed] = useState(false);
 
   const currentUser = useAppStore((state) => state.currentUser);
   const applications = useAppStore((state) => state.applications);
@@ -108,6 +116,43 @@ export default function RegistrationForm() {
       (seal) => isSealReadyForRegistration(seal)
     );
   }, [selectedApplication, getAvailableSealsByType]);
+
+  const risks: RiskWarning[] = useMemo(() => {
+    const list: RiskWarning[] = [];
+    if (!formData.photoEvidence) {
+      list.push({
+        level: 'high',
+        title: '未上传存证照片',
+        description: '本次用印登记未上传盖章现场或文件的存证照片，建议拍照留证后再提交。',
+      });
+    }
+    if (selectedApplication) {
+      const now = Date.now();
+      const ONE_DAY = 24 * 60 * 60 * 1000;
+      const sameAppRecentRegs = registrations.filter(
+        (r) =>
+          r.applicationId === selectedApplication.id &&
+          now - new Date(r.createdAt).getTime() <= ONE_DAY
+      );
+      if (sameAppRecentRegs.length >= 1) {
+        list.push({
+          level: 'medium',
+          title: '同一申请短时间内重复登记',
+          description: `该申请（${selectedApplication.id}）在最近 24 小时内已有 ${sameAppRecentRegs.length} 次用印登记，请确认是否为重复操作。`,
+        });
+      }
+      if (sameAppRecentRegs.length >= 3) {
+        list.push({
+          level: 'high',
+          title: '用印次数明显异常',
+          description: `该申请已累计登记 ${sameAppRecentRegs.length} 次，远超常规用印次数（申请数量 ${selectedApplication.quantity} 份），请仔细核对。`,
+        });
+      }
+    }
+    return list;
+  }, [formData.photoEvidence, selectedApplication, registrations]);
+
+  const hasRisks = risks.length > 0;
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -207,6 +252,7 @@ export default function RegistrationForm() {
 
   const handleGoReview = () => {
     if (!validate()) return;
+    setRiskConfirmed(false);
     setStep('review');
   };
 
@@ -216,6 +262,10 @@ export default function RegistrationForm() {
 
   const handleSubmit = async () => {
     if (!validate() || !currentUser) return;
+    if (hasRisks && !riskConfirmed) {
+      alert('请先勾选"我已知晓以上风险，仍确认提交登记"后再提交');
+      return;
+    }
 
     const nowStr = new Date().toISOString();
     const newRegistration: SealRegistration = {
@@ -468,6 +518,55 @@ export default function RegistrationForm() {
         </div>
       </div>
 
+      {hasRisks && (
+        <div className="p-4 bg-amber-50 border border-amber-300 rounded-lg space-y-3">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5 text-amber-600" />
+            <span className="font-semibold text-amber-800">
+              检测到 {risks.length} 项风险提示，请留意
+            </span>
+          </div>
+          <ul className="space-y-2">
+            {risks.map((risk, idx) => (
+              <li
+                key={idx}
+                className={`p-3 rounded-md border ${
+                  risk.level === 'high'
+                    ? 'bg-red-50 border-red-200'
+                    : 'bg-amber-50 border-amber-200'
+                }`}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                      risk.level === 'high'
+                        ? 'bg-red-100 text-red-700'
+                        : 'bg-amber-100 text-amber-700'
+                    }`}
+                  >
+                    {risk.level === 'high' ? '高风险' : '中风险'}
+                  </span>
+                  <span
+                    className={`text-sm font-medium ${
+                      risk.level === 'high' ? 'text-red-800' : 'text-amber-800'
+                    }`}
+                  >
+                    {risk.title}
+                  </span>
+                </div>
+                <p
+                  className={`text-xs ${
+                    risk.level === 'high' ? 'text-red-700' : 'text-amber-700'
+                  }`}
+                >
+                  {risk.description}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="bg-gray-50 rounded-lg border border-gray-200 p-5 space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
@@ -643,31 +742,54 @@ export default function RegistrationForm() {
           {step === 'fill' ? renderFillStep() : renderReviewStep()}
         </div>
 
-        <div className="flex items-center justify-end gap-3 mt-8 pt-6 border-t border-gray-200">
-          {step === 'fill' ? (
-            <>
-              <button onClick={() => navigate(-1)} className="btn-secondary">
-                取消
-              </button>
-              <button
-                onClick={handleGoReview}
-                className="btn-primary inline-flex items-center gap-2"
-              >
-                下一步：复核确认
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            </>
-          ) : (
-            <>
-              <button onClick={handleBackFill} className="btn-secondary">
-                返回修改
-              </button>
-              <button onClick={handleSubmit} className="btn-primary inline-flex items-center gap-2">
-                <Save className="w-4 h-4" />
-                确认用印登记
-              </button>
-            </>
+        <div className="mt-8 pt-6 border-t border-gray-200 space-y-4">
+          {step === 'review' && hasRisks && (
+            <label className="flex items-start gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={riskConfirmed}
+                onChange={(e) => setRiskConfirmed(e.target.checked)}
+                className="mt-0.5 w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              />
+              <span className="text-sm text-gray-700">
+                我已知晓以上风险提示，并确认本次用印登记信息真实有效，仍继续提交登记。
+              </span>
+            </label>
           )}
+          <div className="flex items-center justify-end gap-3">
+            {step === 'fill' ? (
+              <>
+                <button onClick={() => navigate(-1)} className="btn-secondary">
+                  取消
+                </button>
+                <button
+                  onClick={handleGoReview}
+                  className="btn-primary inline-flex items-center gap-2"
+                >
+                  下一步：复核确认
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </>
+            ) : (
+              <>
+                <button onClick={handleBackFill} className="btn-secondary">
+                  返回修改
+                </button>
+                <button
+                  onClick={handleSubmit}
+                  disabled={hasRisks && !riskConfirmed}
+                  className={`btn-primary inline-flex items-center gap-2 ${
+                    hasRisks && !riskConfirmed
+                      ? 'opacity-60 cursor-not-allowed bg-gray-400 border-gray-400 hover:bg-gray-400'
+                      : ''
+                  }`}
+                >
+                  <Save className="w-4 h-4" />
+                  确认用印登记
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>

@@ -1,11 +1,12 @@
+import { useState } from 'react';
 import { ArrowLeft, Edit, RefreshCw, FileText, User, Calendar, Image, ShieldCheck } from 'lucide-react';
 import { useAppStore } from '@/store';
 import StatusBadge from '@/components/StatusBadge';
 import ApprovalTimeline from '@/components/ApprovalTimeline';
+import PhotoEvidenceModal from '@/components/PhotoEvidenceModal';
 import { useNavigate, useParams } from 'react-router-dom';
 import { formatDate } from '@/shared/utils';
-
-
+import type { SealRegistration } from '@/shared/types';
 
 export default function ApplicationDetail() {
   const navigate = useNavigate();
@@ -13,6 +14,8 @@ export default function ApplicationDetail() {
   const applications = useAppStore((state) => state.applications);
   const registrations = useAppStore((state) => state.registrations);
   const seals = useAppStore((state) => state.seals);
+
+  const [previewReg, setPreviewReg] = useState<SealRegistration | null>(null);
 
   const application = id ? applications.find((a) => a.id === id) : undefined;
   const relatedRegistrations = id
@@ -210,11 +213,20 @@ export default function ApplicationDetail() {
                           <div className="sm:col-span-2 flex items-start gap-2">
                             <Image className="w-4 h-4 text-gray-400 mt-0.5" />
                             <div>
-                              <dt className="text-gray-500 mb-1">拍照存证</dt>
+                              <dt className="text-gray-500 mb-1">
+                                拍照存证
+                                <button
+                                  onClick={() => setPreviewReg(reg)}
+                                  className="ml-2 text-xs text-primary-600 hover:text-primary-700 font-medium"
+                                >
+                                  点击查看大图
+                                </button>
+                              </dt>
                               <img
                                 src={reg.photoEvidence}
                                 alt="存证照片"
-                                className="max-w-xs max-h-48 rounded-lg border border-gray-200 object-contain"
+                                onClick={() => setPreviewReg(reg)}
+                                className="max-w-xs max-h-48 rounded-lg border border-gray-200 object-contain cursor-pointer hover:ring-2 hover:ring-primary-400 transition-all"
                               />
                             </div>
                           </div>
@@ -269,6 +281,13 @@ export default function ApplicationDetail() {
           )}
         </div>
       </div>
+
+      <PhotoEvidenceModal
+        open={!!previewReg}
+        onClose={() => setPreviewReg(null)}
+        registration={previewReg || undefined}
+        application={application}
+      />
     </div>
   );
 }

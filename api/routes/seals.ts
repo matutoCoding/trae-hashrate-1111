@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import dataStore from '../dataStore.js';
 import type { Seal, SealStatus } from '../../shared/types.js';
-import { isSealExpired, isSealLocked, isSealUsable } from '../../shared/utils.js';
+import { isSealExpired, isSealLocked, isSealUsable, isSealReadyForRegistration } from '../../shared/utils.js';
 
 const router = Router();
 
@@ -41,7 +41,7 @@ router.get('/available/:sealType', (req: Request, res: Response): void => {
   try {
     const { sealType } = req.params;
     const seals = dataStore.getAll('seals').filter(
-      (s) => s.sealType === decodeURIComponent(sealType) && isSealUsable(s) && !isSealExpired(s),
+      (s) => s.sealType === decodeURIComponent(sealType) && isSealReadyForRegistration(s),
     );
     seals.sort((a, b) => new Date(a.receivedDate).getTime() - new Date(b.receivedDate).getTime());
     res.json({

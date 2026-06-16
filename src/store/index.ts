@@ -16,7 +16,7 @@ import {
   mockApprovalRecords,
   mockRegistrations,
 } from '@/shared/mockData';
-import { isSealUsable, isSealExpired, isSealReadyForRegistration } from '@/shared/utils';
+import { isSealReadyForRegistration } from '@/shared/utils';
 import {
   fetchApplications,
   fetchApplicationById,
@@ -303,7 +303,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   getAvailableSealsByType: (sealType) => {
     const { seals } = get();
     return seals.filter(
-      (seal) => seal.sealType === sealType && isSealReadyForRegistration(seal) && !isSealExpired(seal)
+      (seal) => seal.sealType === sealType && isSealReadyForRegistration(seal)
     );
   },
 
