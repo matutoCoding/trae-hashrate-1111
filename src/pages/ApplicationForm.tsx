@@ -159,21 +159,6 @@ export default function ApplicationForm() {
     if (!validate()) return;
     try {
       if (isEdit && id) {
-        const now = new Date().toISOString();
-        const existingApp = getApplicationById(id);
-        const newTrail = existingApp?.approvalTrail || [];
-        if (currentUser) {
-          newTrail.push({
-            id: 'ar' + Date.now().toString(36),
-            applicationId: id,
-            node: 'submitter',
-            approverId: currentUser.id,
-            approverName: currentUser.name,
-            action: 'submit',
-            opinion: '提交用印申请',
-            timestamp: now,
-          });
-        }
         const result = updateApplication(id, {
           sealType: formData.sealType,
           reason: formData.reason,
@@ -181,9 +166,7 @@ export default function ApplicationForm() {
           quantity: formData.quantity,
           urgency: formData.urgency,
           remark: formData.remark,
-          status: 'pending_dept',
-          currentNode: 'dept_head',
-          approvalTrail: newTrail,
+          submit: true,
         });
         if (result instanceof Promise) {
           await result;

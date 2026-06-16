@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import dataStore from '../dataStore.js';
-import type { ApprovalRecord, ApplicationStatus, ApprovalNode } from '../../shared/types.js';
-import { getPreviousNode } from '../../shared/utils.js';
+import type { ApprovalRecord, ApplicationStatus, ApprovalNode, SealApplication } from '../../shared/types.js';
+import { getPreviousNode, canApproveNode } from '../../shared/utils.js';
 
 const router = Router();
 
@@ -42,21 +42,34 @@ router.get('/pending', (req: Request, res: Response): void => {
 router.post('/:id/approve', (req: Request, res: Response): void => {
   try {
     const { id } = req.params;
-    const { approverId, approverName, opinion, node } = req.body;
+    const { approverId, approverName, opinion, node } = req.body as {
+      approverId?: string;
+      approverName?: string;
+      opinion?: string;
+      node?: ApprovalNode;
+    };
 
     if (!approverId || !approverName || !node) {
       res.status(400).json({
         success: false,
-        error: '缺少审批人信息',
+        error: '缺少审批人信息或审批节点',
       });
       return;
     }
 
-    const application = dataStore.getById('applications', id);
+    const application = dataStore.getById('applications', id) as SealApplication | undefined;
     if (!application) {
       res.status(404).json({
         success: false,
         error: '申请不存在',
+      });
+      return;
+    }
+
+    if (!canApproveNode(application.status, application.currentNode, node)) {
+      res.status(400).json({
+        success: false,
+        error: `当前申请状态为"${application.status}"，节点为"${application.currentNode}"，无法以"${node}"身份审批`,
       });
       return;
     }
@@ -107,21 +120,34 @@ router.post('/:id/approve', (req: Request, res: Response): void => {
 router.post('/:id/reject', (req: Request, res: Response): void => {
   try {
     const { id } = req.params;
-    const { approverId, approverName, opinion, node } = req.body;
+    const { approverId, approverName, opinion, node } = req.body as {
+      approverId?: string;
+      approverName?: string;
+      opinion?: string;
+      node?: ApprovalNode;
+    };
 
     if (!approverId || !approverName || !node) {
       res.status(400).json({
         success: false,
-        error: '缺少审批人信息',
+        error: '缺少审批人信息或审批节点',
       });
       return;
     }
 
-    const application = dataStore.getById('applications', id);
+    const application = dataStore.getById('applications', id) as SealApplication | undefined;
     if (!application) {
       res.status(404).json({
         success: false,
         error: '申请不存在',
+      });
+      return;
+    }
+
+    if (!canApproveNode(application.status, application.currentNode, node)) {
+      res.status(400).json({
+        success: false,
+        error: `当前申请状态为"${application.status}"，节点为"${application.currentNode}"，无法以"${node}"身份驳回`,
       });
       return;
     }
@@ -140,9 +166,18 @@ router.post('/:id/reject', (req: Request, res: Response): void => {
 
     const previousNode = getPreviousNode(node as ApprovalNode);
 
+    let newStatus: ApplicationStatus;
+    if (node === 'leader') {
+      newStatus = 'pending_dept';
+    } else if (node === 'dept_head') {
+      newStatus = 'rejected';
+    } else {
+      newStatus = 'rejected';
+    }
+
     const existingTrail = application.approvalTrail || [];
     const updated = dataStore.update('applications', id, {
-      status: 'rejected',
+      status: newStatus,
       currentNode: previousNode,
       updatedAt: now,
       approvalTrail: [...existingTrail, approvalRecord],

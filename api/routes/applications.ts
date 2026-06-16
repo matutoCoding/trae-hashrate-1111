@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import dataStore from '../dataStore.js';
-import type { SealApplication, ApplicationStatus, ApprovalRecord } from '../../shared/types.js';
+import type { SealApplication, ApplicationStatus, ApprovalRecord, ApprovalNode } from '../../shared/types.js';
+import { canSubmitApplication } from '../../shared/utils.js';
 
 const router = Router();
 
@@ -85,6 +86,7 @@ router.post('/', (req: Request, res: Response): void => {
       documentName,
       quantity,
       urgency,
+      submit,
     } = req.body;
 
     if (!applicantId || !applicantName || !sealType || !reason || !documentName) {
@@ -96,6 +98,25 @@ router.post('/', (req: Request, res: Response): void => {
     }
 
     const now = new Date().toISOString();
+    const submitAction = submit === true;
+
+    let initialStatus: ApplicationStatus = submitAction ? 'pending_dept' : 'draft';
+    const initialNode: ApprovalNode = submitAction ? 'dept_head' : 'submitter';
+    const approvalTrail: ApprovalRecord[] = [];
+
+    if (submitAction) {
+      const submitRecord = dataStore.create('approvalRecords', {
+        applicationId: '',
+        node: 'submitter',
+        approverId: applicantId,
+        approverName: applicantName,
+        action: 'submit',
+        opinion: '提交申请',
+        timestamp: now,
+      } as Omit<ApprovalRecord, 'id'>) as ApprovalRecord;
+      approvalTrail.push(submitRecord);
+    }
+
     const newApplication = dataStore.create('applications', {
       applicantId,
       applicantName,
@@ -106,12 +127,21 @@ router.post('/', (req: Request, res: Response): void => {
       documentName,
       quantity: quantity || 1,
       urgency: urgency || 'normal',
-      status: 'draft',
-      currentNode: 'submitter',
+      status: initialStatus,
+      currentNode: initialNode,
       createdAt: now,
       updatedAt: now,
-      approvalTrail: [],
+      approvalTrail,
     } as Omit<SealApplication, 'id'>);
+
+    if (submitAction && approvalTrail.length > 0) {
+      approvalTrail[0].applicationId = newApplication.id;
+      dataStore.update('approvalRecords', approvalTrail[0].id, { applicationId: newApplication.id });
+      const updatedApp = dataStore.getById('applications', newApplication.id);
+      if (updatedApp) {
+        (updatedApp as SealApplication).approvalTrail = approvalTrail;
+      }
+    }
 
     res.status(201).json({
       success: true,
@@ -142,17 +172,16 @@ router.put('/:id', (req: Request, res: Response): void => {
     const submitAction = updateData.submit === true;
     delete updateData.submit;
 
+    const now = new Date().toISOString();
     let finalData: Partial<SealApplication> = {
+      ...(existing as SealApplication),
       ...updateData,
-      updatedAt: new Date().toISOString(),
-    };
+      updatedAt: now,
+    } as SealApplication;
 
-    if (submitAction && existing.status === 'draft') {
-      finalData = {
-        ...finalData,
-        status: 'pending_dept',
-        currentNode: 'dept_head',
-      };
+    if (submitAction && canSubmitApplication(existing.status, existing.currentNode)) {
+      finalData.status = 'pending_dept';
+      finalData.currentNode = 'dept_head';
 
       const submitRecord = dataStore.create('approvalRecords', {
         applicationId: id,
@@ -161,7 +190,7 @@ router.put('/:id', (req: Request, res: Response): void => {
         approverName: existing.applicantName,
         action: 'submit',
         opinion: '提交申请',
-        timestamp: new Date().toISOString(),
+        timestamp: now,
       } as Omit<ApprovalRecord, 'id'>);
 
       const existingTrail = existing.approvalTrail || [];

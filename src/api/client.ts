@@ -124,6 +124,7 @@ interface CreateApplicationData {
   documentName: string;
   quantity?: number;
   urgency?: 'normal' | 'urgent' | 'emergency';
+  submit?: boolean;
 }
 
 export function createApplication(

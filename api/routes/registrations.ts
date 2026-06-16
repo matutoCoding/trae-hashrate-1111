@@ -1,7 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import dataStore from '../dataStore.js';
 import type { SealRegistration } from '../../shared/types.js';
-import { isSealExpired, isSealLocked } from '../../shared/utils.js';
+import { isSealExpired, isSealLocked, isSealReadyForRegistration } from '../../shared/utils.js';
 
 const router = Router();
 
@@ -122,6 +122,14 @@ router.post('/', (req: Request, res: Response): void => {
       return;
     }
 
+    if (seal.status === 'stored') {
+      res.status(400).json({
+        success: false,
+        error: '该印章（' + seal.batchNumber + '）尚未启用，请先启用后再登记使用',
+      });
+      return;
+    }
+
     if (isSealExpired(seal)) {
       res.status(400).json({
         success: false,
@@ -134,6 +142,14 @@ router.post('/', (req: Request, res: Response): void => {
       res.status(400).json({
         success: false,
         error: '该印章已锁定，无法用于登记用印',
+      });
+      return;
+    }
+
+    if (!isSealReadyForRegistration(seal)) {
+      res.status(400).json({
+        success: false,
+        error: '该印章当前状态为"' + seal.status + '"，无法用于登记用印',
       });
       return;
     }

@@ -3,7 +3,7 @@ import { ArrowLeft, Save, Upload, X, Image, FileText, User, Building } from 'luc
 import { useAppStore } from '@/store';
 import { useNavigate } from 'react-router-dom';
 import type { SealRegistration, SealApplication, Seal } from '@/shared/types';
-import { isSealExpired, isSealLocked } from '@/shared/utils';
+import { isSealReadyForRegistration } from '@/shared/utils';
 
 interface FormData {
   applicationId: string;
@@ -60,7 +60,7 @@ export default function RegistrationForm() {
   const availableSeals: Seal[] = useMemo(() => {
     if (!selectedApplication) return [];
     return getAvailableSealsByType(selectedApplication.sealType).filter(
-      (seal) => !isSealExpired(seal) && !isSealLocked(seal)
+      (seal) => isSealReadyForRegistration(seal)
     );
   }, [selectedApplication, getAvailableSealsByType]);
 

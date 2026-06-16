@@ -16,7 +16,7 @@ import {
   mockApprovalRecords,
   mockRegistrations,
 } from '@/shared/mockData';
-import { isSealUsable, isSealExpired } from '@/shared/utils';
+import { isSealUsable, isSealExpired, isSealReadyForRegistration } from '@/shared/utils';
 import {
   fetchApplications,
   fetchApplicationById,
@@ -43,7 +43,7 @@ interface AppState {
   initFromApi: () => Promise<void>;
   setCurrentUser: (userId: string) => void;
   addApplication: (application: SealApplication) => Promise<void>;
-  updateApplication: (id: string, data: Partial<SealApplication>) => Promise<void>;
+  updateApplication: (id: string, data: Partial<SealApplication> & { submit?: boolean }) => Promise<void>;
   getApplicationById: (id: string) => SealApplication | undefined;
   getPendingApprovalsCount: () => number;
   getThisMonthSealCount: () => number;
@@ -91,6 +91,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   addApplication: async (application) => {
     try {
+      const submit = application.status === 'pending_dept';
       const created = await apiCreateApplication({
         applicantId: application.applicantId,
         applicantName: application.applicantName,
@@ -101,6 +102,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         documentName: application.documentName,
         quantity: application.quantity,
         urgency: application.urgency,
+        submit,
       });
       set((state) => ({
         applications: [created, ...state.applications],
@@ -298,7 +300,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   getAvailableSealsByType: (sealType) => {
     const { seals } = get();
     return seals.filter(
-      (seal) => seal.sealType === sealType && isSealUsable(seal) && !isSealExpired(seal)
+      (seal) => seal.sealType === sealType && isSealReadyForRegistration(seal) && !isSealExpired(seal)
     );
   },
 
