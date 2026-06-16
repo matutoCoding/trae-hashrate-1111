@@ -15,9 +15,14 @@ export function isSealUsable(seal: Seal): boolean {
   return seal.status === 'in_use' || seal.status === 'warning' || seal.status === 'stored';
 }
 
-export function isSealReadyForRegistration(seal: Seal): boolean {
+export function isSealEnabled(seal: Seal): boolean {
   if (isSealLocked(seal)) return false;
+  if (!seal.enableDate) return false;
   return seal.status === 'in_use' || seal.status === 'warning';
+}
+
+export function isSealReadyForRegistration(seal: Seal): boolean {
+  return isSealEnabled(seal);
 }
 
 export function getSealDaysRemaining(seal: Seal): number {
@@ -25,6 +30,17 @@ export function getSealDaysRemaining(seal: Seal): number {
   const expiry = new Date(seal.expiryDate);
   const diff = expiry.getTime() - now.getTime();
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
+
+export function formatDate(dateStr: string): string {
+  const date = new Date(dateStr);
+  return date.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 export function getPreviousNode(currentNode: ApprovalNode): ApprovalNode {

@@ -4,29 +4,19 @@ import { useAppStore } from '@/store';
 import StatusBadge from '@/components/StatusBadge';
 import ApprovalTimeline from '@/components/ApprovalTimeline';
 import { useNavigate, useParams } from 'react-router-dom';
-
-function formatDate(dateStr: string) {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
+import { formatDate } from '@/shared/utils';
 
 export default function ApprovalDetail() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const getApplicationById = useAppStore((state) => state.getApplicationById);
+  const applications = useAppStore((state) => state.applications);
   const approveApplication = useAppStore((state) => state.approveApplication);
   const rejectApplication = useAppStore((state) => state.rejectApplication);
 
   const [opinion, setOpinion] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const application = id ? getApplicationById(id) : undefined;
+  const application = id ? applications.find((a) => a.id === id) : undefined;
 
   if (!application) {
     return (

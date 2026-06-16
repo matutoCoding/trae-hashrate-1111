@@ -1,28 +1,26 @@
-import { ArrowLeft, Edit, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Edit, RefreshCw, FileText, User, Calendar, Image, ShieldCheck } from 'lucide-react';
 import { useAppStore } from '@/store';
 import StatusBadge from '@/components/StatusBadge';
 import ApprovalTimeline from '@/components/ApprovalTimeline';
 import { useNavigate, useParams } from 'react-router-dom';
-
-function formatDate(dateStr: string) {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
+import { formatDate } from '@/shared/utils';
 
 
 
 export default function ApplicationDetail() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const getApplicationById = useAppStore((state) => state.getApplicationById);
+  const applications = useAppStore((state) => state.applications);
+  const registrations = useAppStore((state) => state.registrations);
+  const seals = useAppStore((state) => state.seals);
 
-  const application = id ? getApplicationById(id) : undefined;
+  const application = id ? applications.find((a) => a.id === id) : undefined;
+  const relatedRegistrations = id
+    ? registrations
+        .filter((r) => r.applicationId === id)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    : [];
+  const getSealById = (sealId: string) => seals.find((s) => s.id === sealId);
 
   if (!application) {
     return (
@@ -147,6 +145,87 @@ export default function ApplicationDetail() {
             <h2 className="text-lg font-semibold text-gray-900 mb-6">审批轨迹</h2>
             <ApprovalTimeline records={application.approvalTrail} />
           </div>
+
+          {relatedRegistrations.length > 0 && (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-gray-500" />
+                用印登记记录（{relatedRegistrations.length}）
+              </h2>
+              <div className="space-y-5">
+                {relatedRegistrations.map((reg) => {
+                  const seal = getSealById(reg.sealId);
+                  return (
+                    <div
+                      key={reg.id}
+                      className="border border-gray-200 rounded-lg p-5 space-y-4 bg-gray-50/50"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-900">
+                            登记编号 {reg.id}
+                          </span>
+                          <StatusBadge status="registered" type="application" />
+                        </div>
+                        <span className="text-xs text-gray-500">
+                          {formatDate(reg.createdAt)}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                        <div className="flex items-start gap-2">
+                          <ShieldCheck className="w-4 h-4 text-gray-400 mt-0.5" />
+                          <div>
+                            <dt className="text-gray-500">印章批次</dt>
+                            <dd className="text-gray-900 font-medium">
+                              {seal ? `${seal.batchNumber}（${seal.serialNumber}）` : reg.sealId}
+                            </dd>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <User className="w-4 h-4 text-gray-400 mt-0.5" />
+                          <div>
+                            <dt className="text-gray-500">登记人 / 用印人</dt>
+                            <dd className="text-gray-900">
+                              {reg.registrarName} / {reg.registrant}（{reg.registrantDepartment}）
+                            </dd>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-2">
+                          <Calendar className="w-4 h-4 text-gray-400 mt-0.5" />
+                          <div>
+                            <dt className="text-gray-500">用印时间</dt>
+                            <dd className="text-gray-900">{formatDate(reg.usageTime)}</dd>
+                          </div>
+                        </div>
+                        {reg.remark && (
+                          <div className="flex items-start gap-2">
+                            <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
+                            <div>
+                              <dt className="text-gray-500">备注</dt>
+                              <dd className="text-gray-900">{reg.remark}</dd>
+                            </div>
+                          </div>
+                        )}
+                        {reg.photoEvidence && (
+                          <div className="sm:col-span-2 flex items-start gap-2">
+                            <Image className="w-4 h-4 text-gray-400 mt-0.5" />
+                            <div>
+                              <dt className="text-gray-500 mb-1">拍照存证</dt>
+                              <img
+                                src={reg.photoEvidence}
+                                alt="存证照片"
+                                className="max-w-xs max-h-48 rounded-lg border border-gray-200 object-contain"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="space-y-6">

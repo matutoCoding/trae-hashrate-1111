@@ -59,6 +59,9 @@ interface AppState {
   getAvailableSealsByType: (sealType: string) => Seal[];
   addRegistration: (registration: SealRegistration) => Promise<void>;
   getRegistrationById: (id: string) => SealRegistration | undefined;
+  getRegistrationsByApplicationId: (applicationId: string) => SealRegistration[];
+  getRegistrationsBySealId: (sealId: string) => SealRegistration[];
+  getSealById: (id: string) => Seal | undefined;
   getApprovedApplicationsWithoutRegistration: () => SealApplication[];
 }
 
@@ -336,6 +339,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   getRegistrationById: (id) => get().registrations.find((reg) => reg.id === id),
+
+  getRegistrationsByApplicationId: (applicationId) =>
+    get()
+      .registrations.filter((r) => r.applicationId === applicationId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+
+  getRegistrationsBySealId: (sealId) =>
+    get()
+      .registrations.filter((r) => r.sealId === sealId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+
+  getSealById: (id) => get().seals.find((seal) => seal.id === id),
 
   getApprovedApplicationsWithoutRegistration: () => {
     const { applications, registrations } = get();

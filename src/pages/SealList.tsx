@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react';
-import { Search, Plus, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Search, Plus, AlertTriangle, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
 import { useAppStore } from '@/store';
 import StatusBadge from '@/components/StatusBadge';
 import { useNavigate } from 'react-router-dom';
 import type { Seal, SealStatus } from '@/shared/types';
-import { isSealExpired, isSealLocked } from '@/shared/utils';
+import { isSealExpired, isSealLocked, formatDate } from '@/shared/utils';
+import { Link } from 'react-router-dom';
 
 const PAGE_SIZE = 10;
 
@@ -16,15 +17,6 @@ const statusOptions: { value: SealStatus | 'all'; label: string }[] = [
   { value: 'expired', label: '已过期' },
   { value: 'locked', label: '已锁定' },
 ];
-
-function formatDate(dateStr: string) {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-}
 
 function getDaysRemaining(expiryDate: string): number {
   const now = new Date();
@@ -325,28 +317,37 @@ export default function SealList() {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
-                      {seal.isExpired ? (
-                        <span className="text-gray-400 cursor-not-allowed">启用</span>
-                      ) : seal.status === 'stored' ? (
-                        isSealTheEarliestAvailable(seal) ? (
-                          <button
-                            onClick={() => handleEnable(seal)}
-                            className="text-primary-600 hover:text-primary-700 font-medium"
-                          >
-                            启用
-                          </button>
+                      <div className="flex items-center gap-4">
+                        {seal.isExpired ? (
+                          <span className="text-gray-400 cursor-not-allowed">启用</span>
+                        ) : seal.status === 'stored' ? (
+                          isSealTheEarliestAvailable(seal) ? (
+                            <button
+                              onClick={() => handleEnable(seal)}
+                              className="text-primary-600 hover:text-primary-700 font-medium"
+                            >
+                              启用
+                            </button>
+                          ) : (
+                            <button
+                              disabled
+                              title="请先启用更早入库的同类型批次"
+                              className="text-gray-400 cursor-not-allowed font-medium"
+                            >
+                              启用
+                            </button>
+                          )
                         ) : (
-                          <button
-                            disabled
-                            title="请先启用更早入库的同类型批次"
-                            className="text-gray-400 cursor-not-allowed font-medium"
-                          >
-                            启用
-                          </button>
-                        )
-                      ) : (
-                        <span className="text-gray-400">—</span>
-                      )}
+                          <span className="text-gray-400">—</span>
+                        )}
+                        <Link
+                          to={`/seals/${seal.id}`}
+                          className="text-gray-600 hover:text-primary-600 font-medium inline-flex items-center gap-1"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          台账
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))

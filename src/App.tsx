@@ -7,6 +7,7 @@ import ApplicationForm from "@/pages/ApplicationForm";
 import ApplicationDetail from "@/pages/ApplicationDetail";
 import SealList from "@/pages/SealList";
 import SealForm from "@/pages/SealForm";
+import SealDetail from "@/pages/SealDetail";
 import RegistrationList from "@/pages/RegistrationList";
 import RegistrationForm from "@/pages/RegistrationForm";
 import { useAppStore } from "@/store";
@@ -29,6 +30,7 @@ export default function App() {
         <Route path="/applications/:id/edit" element={<ApplicationForm />} />
         <Route path="/seals" element={<SealList />} />
         <Route path="/seals/new" element={<SealForm />} />
+        <Route path="/seals/:id" element={<SealDetail />} />
         <Route path="/registrations" element={<RegistrationList />} />
         <Route path="/registrations/new" element={<RegistrationForm />} />
       </Routes>

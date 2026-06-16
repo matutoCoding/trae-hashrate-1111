@@ -4,6 +4,7 @@ import { useAppStore } from '@/store';
 import StatusBadge from '@/components/StatusBadge';
 import { useNavigate } from 'react-router-dom';
 import type { ApplicationStatus } from '@/shared/types';
+import { formatDate } from '@/shared/utils';
 
 const PAGE_SIZE = 5;
 
@@ -17,17 +18,6 @@ const statusOptions: { value: ApplicationStatus | 'all'; label: string }[] = [
   { value: 'registered', label: '已登记' },
   { value: 'cancelled', label: '已取消' },
 ];
-
-function formatDate(dateStr: string) {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
 
 export default function ApplicationList() {
   const navigate = useNavigate();

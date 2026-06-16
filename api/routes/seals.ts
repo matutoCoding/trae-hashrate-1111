@@ -135,14 +135,10 @@ router.post('/', (req: Request, res: Response): void => {
 
     const now = new Date();
     const expiry = new Date(expiryDate);
-    const warningDate = new Date();
-    warningDate.setDate(warningDate.getDate() + WARNING_DAYS);
 
     let status: SealStatus = 'stored';
     if (expiry < now) {
       status = 'expired';
-    } else if (expiry <= warningDate) {
-      status = 'warning';
     }
 
     const newSeal = dataStore.create('seals', {
@@ -218,8 +214,17 @@ router.put('/:id/enable', (req: Request, res: Response): void => {
     }
 
     const now = new Date().toISOString();
+    const expiry = new Date(existing.expiryDate);
+    const warningDate = new Date();
+    warningDate.setDate(warningDate.getDate() + WARNING_DAYS);
+
+    let newStatus: SealStatus = 'in_use';
+    if (expiry <= warningDate) {
+      newStatus = 'warning';
+    }
+
     const updated = dataStore.update('seals', id, {
-      status: 'in_use' as SealStatus,
+      status: newStatus,
       enableDate: now,
       updatedAt: now,
     } as Partial<Seal>);

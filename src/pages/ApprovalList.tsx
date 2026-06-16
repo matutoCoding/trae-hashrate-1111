@@ -4,6 +4,7 @@ import { useAppStore } from '@/store';
 import StatusBadge from '@/components/StatusBadge';
 import { useNavigate } from 'react-router-dom';
 import type { ApplicationStatus } from '@/shared/types';
+import { formatDate } from '@/shared/utils';
 
 const PAGE_SIZE = 5;
 
@@ -13,17 +14,6 @@ const statusOptions: { value: ApplicationStatus | 'all'; label: string }[] = [
   { value: 'pending_leader', label: '待领导审批' },
 ];
 
-function formatDate(dateStr: string) {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
 function getCurrentNodeLabel(status: ApplicationStatus): string {
   if (status === 'pending_dept') return '待部门审批';
   if (status === 'pending_leader') return '待领导审批';
@@ -32,16 +22,25 @@ function getCurrentNodeLabel(status: ApplicationStatus): string {
 
 export default function ApprovalList() {
   const navigate = useNavigate();
-  const getMyPendingApprovals = useAppStore((state) => state.getMyPendingApprovals);
+  const applications = useAppStore((state) => state.applications);
   const currentUser = useAppStore((state) => state.currentUser);
-  const applications = getMyPendingApprovals();
+
+  const myPendingApprovals = useMemo(() => {
+    if (!currentUser) return [];
+    if (currentUser.role === 'dept_head') {
+      return applications.filter((app) => app.status === 'pending_dept');
+    } else if (currentUser.role === 'leader') {
+      return applications.filter((app) => app.status === 'pending_leader');
+    }
+    return [];
+  }, [applications, currentUser]);
 
   const [statusFilter, setStatusFilter] = useState<ApplicationStatus | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
 
   const filteredApplications = useMemo(() => {
-    return applications.filter((app) => {
+    return myPendingApprovals.filter((app) => {
       const matchesStatus = statusFilter === 'all' || app.status === statusFilter;
       const matchesSearch =
         searchQuery === '' ||
@@ -52,7 +51,7 @@ export default function ApprovalList() {
         app.sealType.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesStatus && matchesSearch;
     });
-  }, [applications, statusFilter, searchQuery]);
+  }, [myPendingApprovals, statusFilter, searchQuery]);
 
   const totalPages = Math.ceil(filteredApplications.length / PAGE_SIZE);
   const paginatedApplications = filteredApplications.slice(

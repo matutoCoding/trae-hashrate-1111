@@ -122,7 +122,7 @@ router.post('/', (req: Request, res: Response): void => {
       return;
     }
 
-    if (seal.status === 'stored') {
+    if (!seal.enableDate) {
       res.status(400).json({
         success: false,
         error: '该印章（' + seal.batchNumber + '）尚未启用，请先启用后再登记使用',

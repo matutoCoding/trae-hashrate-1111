@@ -2,21 +2,11 @@ import { useState, useMemo } from 'react';
 import { Search, Plus, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 import { useAppStore } from '@/store';
 import { useNavigate } from 'react-router-dom';
+import { formatDate } from '@/shared/utils';
 
 const PAGE_SIZE = 10;
 
 const sealTypeOptions = ['全部类型', '公章', '合同专用章', '财务专用章', '法人章', '发票专用章'];
-
-function formatDate(dateStr: string) {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
 
 export default function RegistrationList() {
   const navigate = useNavigate();

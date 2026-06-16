@@ -1,23 +1,9 @@
+import { useMemo } from 'react';
 import { Clock, FileText, AlertTriangle, Stamp } from 'lucide-react';
 import { useAppStore } from '@/store';
 import StatusBadge from '@/components/StatusBadge';
 import { useNavigate } from 'react-router-dom';
-
-function formatDate(dateStr: string) {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-}
-
-function getDaysUntilExpiry(expiryDate: string) {
-  const now = new Date();
-  const expiry = new Date(expiryDate);
-  const diff = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  return diff;
-}
+import { formatDate, getSealDaysRemaining } from '@/shared/utils';
 
 const statCards = [
   { key: 'pending', label: '待审批数', icon: Clock, color: 'from-amber-500 to-orange-500' },
@@ -28,19 +14,59 @@ const statCards = [
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const applications = useAppStore((state) => state.applications);
   const seals = useAppStore((state) => state.seals);
-  const getPendingApprovalsCount = useAppStore((state) => state.getPendingApprovalsCount);
-  const getThisMonthSealCount = useAppStore((state) => state.getThisMonthSealCount);
-  const getExpiringSeals = useAppStore((state) => state.getExpiringSeals);
-  const getSealTypeDistribution = useAppStore((state) => state.getSealTypeDistribution);
-  const getRecentApplications = useAppStore((state) => state.getRecentApplications);
 
-  const pendingCount = getPendingApprovalsCount();
-  const monthlyCount = getThisMonthSealCount();
-  const expiringSeals = getExpiringSeals(30);
+  const pendingCount = useMemo(
+    () =>
+      applications.filter(
+        (app) => app.status === 'pending_dept' || app.status === 'pending_leader'
+      ).length,
+    [applications]
+  );
+
+  const monthlyCount = useMemo(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    return applications
+      .filter((app) => {
+        const createdAt = new Date(app.createdAt);
+        return (
+          createdAt.getMonth() === currentMonth &&
+          createdAt.getFullYear() === currentYear &&
+          (app.status === 'approved' || app.status === 'registered')
+        );
+      })
+      .reduce((sum, app) => sum + app.quantity, 0);
+  }, [applications]);
+
+  const expiringSeals = useMemo(() => {
+    const now = new Date();
+    const threshold = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    return seals.filter((seal) => {
+      const expiryDate = new Date(seal.expiryDate);
+      return expiryDate <= threshold && expiryDate >= now;
+    });
+  }, [seals]);
+
   const totalSeals = seals.length;
-  const sealDistribution = getSealTypeDistribution();
-  const recentApplications = getRecentApplications(5);
+
+  const sealDistribution = useMemo(() => {
+    const distribution: Record<string, number> = {};
+    applications.forEach((app) => {
+      distribution[app.sealType] = (distribution[app.sealType] || 0) + 1;
+    });
+    return Object.entries(distribution).map(([type, count]) => ({ type, count }));
+  }, [applications]);
+
+  const recentApplications = useMemo(
+    () =>
+      [...applications]
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 5),
+    [applications]
+  );
 
   const statValues: Record<string, number> = {
     pending: pendingCount,
@@ -98,7 +124,7 @@ export default function Dashboard() {
           ) : (
             <div className="space-y-3">
               {expiringSeals.map((seal) => {
-                const daysLeft = getDaysUntilExpiry(seal.expiryDate);
+                const daysLeft = getSealDaysRemaining(seal);
                 const isUrgent = daysLeft <= 7;
                 return (
                   <div
