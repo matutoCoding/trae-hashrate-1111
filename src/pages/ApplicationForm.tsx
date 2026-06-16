@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { ArrowLeft, Save, Send } from 'lucide-react';
 import { useAppStore } from '@/store';
 import { useNavigate, useParams } from 'react-router-dom';
-import type { SealApplication, UrgencyLevel, ApprovalNode, ApplicationStatus } from '../../shared/types';
+import type { SealApplication, UrgencyLevel, ApprovalNode, ApplicationStatus } from '@/shared/types';
 
 const sealTypeOptions = ['公章', '合同专用章', '财务专用章', '法人章', '发票专用章'];
 const urgencyOptions: { value: UrgencyLevel; label: string }[] = [
@@ -125,58 +125,82 @@ export default function ApplicationForm() {
     };
   };
 
-  const handleSaveDraft = () => {
-    if (isEdit && id) {
-      updateApplication(id, {
-        sealType: formData.sealType,
-        reason: formData.reason,
-        documentName: formData.documentName,
-        quantity: formData.quantity,
-        urgency: formData.urgency,
-        remark: formData.remark,
-        status: 'draft',
-      });
-    } else {
-      const newApp = createApplication('draft');
-      if (newApp) addApplication(newApp);
+  const handleSaveDraft = async () => {
+    try {
+      if (isEdit && id) {
+        const result = updateApplication(id, {
+          sealType: formData.sealType,
+          reason: formData.reason,
+          documentName: formData.documentName,
+          quantity: formData.quantity,
+          urgency: formData.urgency,
+          remark: formData.remark,
+          status: 'draft',
+        });
+        if (result instanceof Promise) {
+          await result;
+        }
+      } else {
+        const newApp = createApplication('draft');
+        if (newApp) {
+          const result = addApplication(newApp);
+          if (result instanceof Promise) {
+            await result;
+          }
+        }
+      }
+      navigate('/applications');
+    } catch (error: any) {
+      alert(error?.message || '保存失败，请重试');
     }
-    navigate('/applications');
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validate()) return;
-    if (isEdit && id) {
-      const now = new Date().toISOString();
-      const existingApp = getApplicationById(id);
-      const newTrail = existingApp?.approvalTrail || [];
-      if (currentUser) {
-        newTrail.push({
-          id: 'ar' + Date.now().toString(36),
-          applicationId: id,
-          node: 'submitter',
-          approverId: currentUser.id,
-          approverName: currentUser.name,
-          action: 'submit',
-          opinion: '提交用印申请',
-          timestamp: now,
+    try {
+      if (isEdit && id) {
+        const now = new Date().toISOString();
+        const existingApp = getApplicationById(id);
+        const newTrail = existingApp?.approvalTrail || [];
+        if (currentUser) {
+          newTrail.push({
+            id: 'ar' + Date.now().toString(36),
+            applicationId: id,
+            node: 'submitter',
+            approverId: currentUser.id,
+            approverName: currentUser.name,
+            action: 'submit',
+            opinion: '提交用印申请',
+            timestamp: now,
+          });
+        }
+        const result = updateApplication(id, {
+          sealType: formData.sealType,
+          reason: formData.reason,
+          documentName: formData.documentName,
+          quantity: formData.quantity,
+          urgency: formData.urgency,
+          remark: formData.remark,
+          status: 'pending_dept',
+          currentNode: 'dept_head',
+          approvalTrail: newTrail,
         });
+        if (result instanceof Promise) {
+          await result;
+        }
+      } else {
+        const newApp = createApplication('pending_dept');
+        if (newApp) {
+          const result = addApplication(newApp);
+          if (result instanceof Promise) {
+            await result;
+          }
+        }
       }
-      updateApplication(id, {
-        sealType: formData.sealType,
-        reason: formData.reason,
-        documentName: formData.documentName,
-        quantity: formData.quantity,
-        urgency: formData.urgency,
-        remark: formData.remark,
-        status: 'pending_dept',
-        currentNode: 'dept_head',
-        approvalTrail: newTrail,
-      });
-    } else {
-      const newApp = createApplication('pending_dept');
-      if (newApp) addApplication(newApp);
+      navigate('/applications');
+    } catch (error: any) {
+      alert(error?.message || '提交失败，请重试');
     }
-    navigate('/applications');
   };
 
   return (

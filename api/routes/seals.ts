@@ -1,10 +1,11 @@
 import { Router, type Request, type Response } from 'express';
 import dataStore from '../dataStore.js';
 import type { Seal, SealStatus } from '../../shared/types.js';
+import { isSealExpired, isSealLocked, isSealUsable } from '../../shared/utils.js';
 
 const router = Router();
 
-const WARNING_DAYS = 90;
+const WARNING_DAYS = 30;
 
 router.get('/', (req: Request, res: Response): void => {
   try {
@@ -32,6 +33,25 @@ router.get('/', (req: Request, res: Response): void => {
     res.status(500).json({
       success: false,
       error: '获取印章列表失败',
+    });
+  }
+});
+
+router.get('/available/:sealType', (req: Request, res: Response): void => {
+  try {
+    const { sealType } = req.params;
+    const seals = dataStore.getAll('seals').filter(
+      (s) => s.sealType === decodeURIComponent(sealType) && isSealUsable(s) && !isSealExpired(s),
+    );
+    seals.sort((a, b) => new Date(a.receivedDate).getTime() - new Date(b.receivedDate).getTime());
+    res.json({
+      success: true,
+      data: seals,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: '获取可用印章失败',
     });
   }
 });
@@ -145,6 +165,73 @@ router.post('/', (req: Request, res: Response): void => {
     res.status(500).json({
       success: false,
       error: '新增印章失败',
+    });
+  }
+});
+
+router.put('/:id/enable', (req: Request, res: Response): void => {
+  try {
+    const { id } = req.params;
+
+    const existing = dataStore.getById('seals', id);
+    if (!existing) {
+      res.status(404).json({
+        success: false,
+        error: '印章不存在',
+      });
+      return;
+    }
+
+    if (existing.status !== 'stored') {
+      res.status(400).json({
+        success: false,
+        error: '只有入库状态的印章可以启用',
+      });
+      return;
+    }
+
+    if (isSealExpired(existing) || isSealLocked(existing)) {
+      res.status(400).json({
+        success: false,
+        error: '印章已过期或锁定，无法启用',
+      });
+      return;
+    }
+
+    const sameTypeStored = dataStore
+      .getAll('seals')
+      .filter(
+        (s) =>
+          s.sealType === existing.sealType &&
+          s.status === 'stored' &&
+          !isSealExpired(s) &&
+          !isSealLocked(s),
+      )
+      .sort((a, b) => new Date(a.receivedDate).getTime() - new Date(b.receivedDate).getTime());
+
+    if (sameTypeStored.length > 0 && sameTypeStored[0].id !== id) {
+      res.status(400).json({
+        success: false,
+        error: `请先启用同类型更早入库的批次：${sameTypeStored[0].batchNumber}（${sameTypeStored[0].serialNumber}）`,
+      });
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const updated = dataStore.update('seals', id, {
+      status: 'in_use' as SealStatus,
+      enableDate: now,
+      updatedAt: now,
+    } as Partial<Seal>);
+
+    res.json({
+      success: true,
+      data: updated,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: '启用印章失败',
     });
   }
 });

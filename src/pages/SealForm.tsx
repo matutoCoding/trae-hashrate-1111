@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ArrowLeft, Save } from 'lucide-react';
 import { useAppStore } from '@/store';
 import { useNavigate } from 'react-router-dom';
-import type { Seal } from '../../shared/types';
+import type { Seal } from '@/shared/types';
 
 const sealTypeOptions = ['公章', '合同专用章', '财务专用章', '法人章', '发票专用章'];
 
@@ -69,7 +69,7 @@ export default function SealForm() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validate()) return;
 
     const now = new Date().toISOString();
@@ -85,8 +85,15 @@ export default function SealForm() {
       remark: formData.remark || undefined,
     };
 
-    addSeal(newSeal);
-    navigate('/seals');
+    try {
+      const result = addSeal(newSeal);
+      if (result instanceof Promise) {
+        await result;
+      }
+      navigate('/seals');
+    } catch (error: any) {
+      alert(error?.message || '入库失败，请重试');
+    }
   };
 
   const sealAdmins = users.filter((u) => u.role === 'seal_admin' || u.role === 'admin');

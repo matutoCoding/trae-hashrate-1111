@@ -51,10 +51,11 @@ export default function ApprovalDetail() {
     if (!id) return;
     setIsSubmitting(true);
     try {
-      approveApplication(id, opinion || '同意');
-      setTimeout(() => {
-        navigate('/approvals');
-      }, 500);
+      const result = approveApplication(id, opinion || '同意');
+      if (result instanceof Promise) {
+        await result;
+      }
+      navigate('/approvals');
     } finally {
       setIsSubmitting(false);
     }
@@ -68,10 +69,11 @@ export default function ApprovalDetail() {
     }
     setIsSubmitting(true);
     try {
-      rejectApplication(id, opinion);
-      setTimeout(() => {
-        navigate('/approvals');
-      }, 500);
+      const result = rejectApplication(id, opinion);
+      if (result instanceof Promise) {
+        await result;
+      }
+      navigate('/approvals');
     } finally {
       setIsSubmitting(false);
     }

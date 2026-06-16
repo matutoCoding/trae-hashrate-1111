@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Bell, ChevronDown, User, Users } from 'lucide-react';
-import type { UserRole } from '../../../shared/types';
+import type { UserRole } from '@/shared/types';
 import { useAppStore } from '@/store';
 import { cn } from '@/lib/utils';
 

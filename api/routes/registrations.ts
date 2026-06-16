@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import dataStore from '../dataStore.js';
 import type { SealRegistration } from '../../shared/types.js';
+import { isSealExpired, isSealLocked } from '../../shared/utils.js';
 
 const router = Router();
 
@@ -104,11 +105,35 @@ router.post('/', (req: Request, res: Response): void => {
       return;
     }
 
+    if (application.status !== 'approved') {
+      res.status(400).json({
+        success: false,
+        error: '关联的申请未通过审批，无法登记用印',
+      });
+      return;
+    }
+
     const seal = dataStore.getById('seals', sealId);
     if (!seal) {
       res.status(404).json({
         success: false,
         error: '关联的印章不存在',
+      });
+      return;
+    }
+
+    if (isSealExpired(seal)) {
+      res.status(400).json({
+        success: false,
+        error: '该印章已过期，无法用于登记用印',
+      });
+      return;
+    }
+
+    if (isSealLocked(seal)) {
+      res.status(400).json({
+        success: false,
+        error: '该印章已锁定，无法用于登记用印',
       });
       return;
     }
@@ -130,6 +155,7 @@ router.post('/', (req: Request, res: Response): void => {
 
     dataStore.update('applications', applicationId, {
       status: 'registered',
+      sealId,
       updatedAt: now,
     });
 

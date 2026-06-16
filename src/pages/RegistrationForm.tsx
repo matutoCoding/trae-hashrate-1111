@@ -2,7 +2,8 @@ import { useState, useMemo, useRef } from 'react';
 import { ArrowLeft, Save, Upload, X, Image, FileText, User, Building } from 'lucide-react';
 import { useAppStore } from '@/store';
 import { useNavigate } from 'react-router-dom';
-import type { SealRegistration, SealApplication, Seal } from '../../shared/types';
+import type { SealRegistration, SealApplication, Seal } from '@/shared/types';
+import { isSealExpired, isSealLocked } from '@/shared/utils';
 
 interface FormData {
   applicationId: string;
@@ -35,8 +36,7 @@ export default function RegistrationForm() {
   const currentUser = useAppStore((state) => state.currentUser);
   const approvedApps = useAppStore((state) => state.getApprovedApplicationsWithoutRegistration());
   const addRegistration = useAppStore((state) => state.addRegistration);
-  const updateApplication = useAppStore((state) => state.updateApplication);
-  const seals = useAppStore((state) => state.seals);
+  const getAvailableSealsByType = useAppStore((state) => state.getAvailableSealsByType);
 
   const now = new Date();
   const initialFormData: FormData = {
@@ -59,12 +59,10 @@ export default function RegistrationForm() {
 
   const availableSeals: Seal[] = useMemo(() => {
     if (!selectedApplication) return [];
-    return seals.filter(
-      (seal) =>
-        seal.sealType === selectedApplication.sealType &&
-        (seal.status === 'in_use' || seal.status === 'warning')
+    return getAvailableSealsByType(selectedApplication.sealType).filter(
+      (seal) => !isSealExpired(seal) && !isSealLocked(seal)
     );
-  }, [selectedApplication, seals]);
+  }, [selectedApplication, getAvailableSealsByType]);
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -162,7 +160,7 @@ export default function RegistrationForm() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!validate() || !currentUser) return;
 
     const now = new Date().toISOString();
@@ -180,13 +178,15 @@ export default function RegistrationForm() {
       createdAt: now,
     };
 
-    addRegistration(newRegistration);
-    updateApplication(formData.applicationId, {
-      status: 'registered',
-      sealId: formData.sealId,
-    });
-
-    navigate('/registrations');
+    try {
+      const result = addRegistration(newRegistration);
+      if (result instanceof Promise) {
+        await result;
+      }
+      navigate('/registrations');
+    } catch (error: any) {
+      alert(error?.message || '提交失败，请重试');
+    }
   };
 
   return (

@@ -3,7 +3,7 @@ import { Search, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useAppStore } from '@/store';
 import StatusBadge from '@/components/StatusBadge';
 import { useNavigate } from 'react-router-dom';
-import type { ApplicationStatus } from '../../shared/types';
+import type { ApplicationStatus } from '@/shared/types';
 
 const PAGE_SIZE = 5;
 

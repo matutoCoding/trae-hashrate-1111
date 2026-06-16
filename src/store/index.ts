@@ -8,15 +8,29 @@ import type {
   ApplicationStatus,
   SealStatus,
   UrgencyLevel,
-  ApprovalNode,
-} from '../../shared/types';
+} from '@/shared/types';
 import {
   mockApplications,
   mockSeals,
   mockUsers,
   mockApprovalRecords,
   mockRegistrations,
-} from '../../shared/mockData';
+} from '@/shared/mockData';
+import { isSealUsable, isSealExpired } from '@/shared/utils';
+import {
+  fetchApplications,
+  fetchApplicationById,
+  createApplication as apiCreateApplication,
+  updateApplication as apiUpdateApplication,
+  approveApplication as apiApproveApplication,
+  rejectApplication as apiRejectApplication,
+  fetchSeals,
+  createSeal as apiCreateSeal,
+  enableSeal as apiEnableSeal,
+  updateSeal as apiUpdateSeal,
+  fetchRegistrations,
+  createRegistration as apiCreateRegistration,
+} from '@/api/client';
 
 interface AppState {
   currentUser: User | null;
@@ -25,9 +39,11 @@ interface AppState {
   users: User[];
   approvalRecords: ApprovalRecord[];
   registrations: SealRegistration[];
+
+  initFromApi: () => Promise<void>;
   setCurrentUser: (userId: string) => void;
-  addApplication: (application: SealApplication) => void;
-  updateApplication: (id: string, data: Partial<SealApplication>) => void;
+  addApplication: (application: SealApplication) => Promise<void>;
+  updateApplication: (id: string, data: Partial<SealApplication>) => Promise<void>;
   getApplicationById: (id: string) => SealApplication | undefined;
   getPendingApprovalsCount: () => number;
   getThisMonthSealCount: () => number;
@@ -35,13 +51,13 @@ interface AppState {
   getSealTypeDistribution: () => { type: string; count: number }[];
   getRecentApplications: (limit: number) => SealApplication[];
   getMyPendingApprovals: () => SealApplication[];
-  approveApplication: (applicationId: string, opinion: string) => void;
-  rejectApplication: (applicationId: string, opinion: string) => void;
-  addSeal: (seal: Seal) => void;
-  updateSeal: (id: string, data: Partial<Seal>) => void;
-  enableSeal: (id: string) => void;
+  approveApplication: (applicationId: string, opinion: string) => Promise<void>;
+  rejectApplication: (applicationId: string, opinion: string) => Promise<void>;
+  addSeal: (seal: Seal) => Promise<void>;
+  updateSeal: (id: string, data: Partial<Seal>) => Promise<void>;
+  enableSeal: (id: string) => Promise<void>;
   getAvailableSealsByType: (sealType: string) => Seal[];
-  addRegistration: (registration: SealRegistration) => void;
+  addRegistration: (registration: SealRegistration) => Promise<void>;
   getRegistrationById: (id: string) => SealRegistration | undefined;
   getApprovedApplicationsWithoutRegistration: () => SealApplication[];
 }
@@ -54,23 +70,60 @@ export const useAppStore = create<AppState>((set, get) => ({
   approvalRecords: mockApprovalRecords,
   registrations: mockRegistrations,
 
+  initFromApi: async () => {
+    try {
+      const [applications, seals, registrations] = await Promise.all([
+        fetchApplications(),
+        fetchSeals(),
+        fetchRegistrations(),
+      ]);
+      set({ applications, seals, registrations });
+    } catch (error) {
+      console.error('Failed to initialize data from API:', error);
+    }
+  },
+
   setCurrentUser: (userId) =>
     set((state) => {
       const user = state.users.find((u) => u.id === userId);
       return { currentUser: user || state.currentUser };
     }),
 
-  addApplication: (application) =>
-    set((state) => ({
-      applications: [application, ...state.applications],
-    })),
+  addApplication: async (application) => {
+    try {
+      const created = await apiCreateApplication({
+        applicantId: application.applicantId,
+        applicantName: application.applicantName,
+        department: application.department,
+        sealType: application.sealType,
+        sealId: application.sealId,
+        reason: application.reason,
+        documentName: application.documentName,
+        quantity: application.quantity,
+        urgency: application.urgency,
+      });
+      set((state) => ({
+        applications: [created, ...state.applications],
+      }));
+    } catch (error) {
+      console.error('Failed to create application:', error);
+      throw error;
+    }
+  },
 
-  updateApplication: (id, data) =>
-    set((state) => ({
-      applications: state.applications.map((app) =>
-        app.id === id ? { ...app, ...data, updatedAt: new Date().toISOString() } : app
-      ),
-    })),
+  updateApplication: async (id, data) => {
+    try {
+      const updated = await apiUpdateApplication(id, data);
+      set((state) => ({
+        applications: state.applications.map((app) =>
+          app.id === id ? updated : app
+        ),
+      }));
+    } catch (error) {
+      console.error('Failed to update application:', error);
+      throw error;
+    }
+  },
 
   getApplicationById: (id) => get().applications.find((app) => app.id === id),
 
@@ -135,130 +188,150 @@ export const useAppStore = create<AppState>((set, get) => ({
     return [];
   },
 
-  approveApplication: (applicationId, opinion) => {
+  approveApplication: async (applicationId, opinion) => {
     const { applications, currentUser, approvalRecords } = get();
     const application = applications.find((app) => app.id === applicationId);
     if (!application || !currentUser) return;
 
-    let newStatus: ApplicationStatus;
-    let newCurrentNode: ApprovalNode;
+    try {
+      const updated = await apiApproveApplication(applicationId, {
+        approverId: currentUser.id,
+        approverName: currentUser.name,
+        opinion,
+        node: application.currentNode,
+      });
 
-    if (application.currentNode === 'dept_head') {
-      newStatus = 'pending_leader';
-      newCurrentNode = 'leader';
-    } else if (application.currentNode === 'leader') {
-      newStatus = 'approved';
-      newCurrentNode = 'leader';
-    } else {
-      return;
+      const newApprovalRecords = updated.approvalTrail.filter(
+        (record) => !approvalRecords.some((ar) => ar.id === record.id)
+      );
+
+      set({
+        applications: applications.map((app) =>
+          app.id === applicationId ? updated : app
+        ),
+        approvalRecords: [...approvalRecords, ...newApprovalRecords],
+      });
+    } catch (error) {
+      console.error('Failed to approve application:', error);
+      throw error;
     }
-
-    const newApprovalRecord: ApprovalRecord = {
-      id: `ar${Date.now()}`,
-      applicationId,
-      node: application.currentNode,
-      approverId: currentUser.id,
-      approverName: currentUser.name,
-      action: 'approve',
-      opinion,
-      timestamp: new Date().toISOString(),
-    };
-
-    set({
-      applications: applications.map((app) =>
-        app.id === applicationId
-          ? {
-              ...app,
-              status: newStatus,
-              currentNode: newCurrentNode,
-              approvalTrail: [...app.approvalTrail, newApprovalRecord],
-              updatedAt: new Date().toISOString(),
-            }
-          : app
-      ),
-      approvalRecords: [...approvalRecords, newApprovalRecord],
-    });
   },
 
-  rejectApplication: (applicationId, opinion) => {
+  rejectApplication: async (applicationId, opinion) => {
     const { applications, currentUser, approvalRecords } = get();
     const application = applications.find((app) => app.id === applicationId);
     if (!application || !currentUser) return;
 
-    let newCurrentNode: ApprovalNode;
+    try {
+      const updated = await apiRejectApplication(applicationId, {
+        approverId: currentUser.id,
+        approverName: currentUser.name,
+        opinion,
+        node: application.currentNode,
+      });
 
-    if (application.currentNode === 'dept_head') {
-      newCurrentNode = 'submitter';
-    } else if (application.currentNode === 'leader') {
-      newCurrentNode = 'dept_head';
-    } else {
-      return;
+      const newApprovalRecords = updated.approvalTrail.filter(
+        (record) => !approvalRecords.some((ar) => ar.id === record.id)
+      );
+
+      set({
+        applications: applications.map((app) =>
+          app.id === applicationId ? updated : app
+        ),
+        approvalRecords: [...approvalRecords, ...newApprovalRecords],
+      });
+    } catch (error) {
+      console.error('Failed to reject application:', error);
+      throw error;
     }
-
-    const newApprovalRecord: ApprovalRecord = {
-      id: `ar${Date.now()}`,
-      applicationId,
-      node: application.currentNode,
-      approverId: currentUser.id,
-      approverName: currentUser.name,
-      action: 'reject',
-      opinion,
-      timestamp: new Date().toISOString(),
-    };
-
-    set({
-      applications: applications.map((app) =>
-        app.id === applicationId
-          ? {
-              ...app,
-              status: 'rejected',
-              currentNode: newCurrentNode,
-              approvalTrail: [...app.approvalTrail, newApprovalRecord],
-              updatedAt: new Date().toISOString(),
-            }
-          : app
-      ),
-      approvalRecords: [...approvalRecords, newApprovalRecord],
-    });
   },
 
-  addSeal: (seal) =>
-    set((state) => ({
-      seals: [seal, ...state.seals],
-    })),
+  addSeal: async (seal) => {
+    try {
+      const created = await apiCreateSeal({
+        batchNumber: seal.batchNumber,
+        sealType: seal.sealType,
+        serialNumber: seal.serialNumber,
+        receivedDate: seal.receivedDate,
+        expiryDate: seal.expiryDate,
+        custodian: seal.custodian,
+        enableDate: seal.enableDate,
+        remark: seal.remark,
+      });
+      set((state) => ({
+        seals: [created, ...state.seals],
+      }));
+    } catch (error) {
+      console.error('Failed to create seal:', error);
+      throw error;
+    }
+  },
 
-  updateSeal: (id, data) =>
-    set((state) => ({
-      seals: state.seals.map((seal) =>
-        seal.id === id ? { ...seal, ...data, updatedAt: new Date().toISOString() } : seal
-      ),
-    })),
+  updateSeal: async (id, data) => {
+    try {
+      const updated = await apiUpdateSeal(id, data);
+      set((state) => ({
+        seals: state.seals.map((seal) =>
+          seal.id === id ? updated : seal
+        ),
+      }));
+    } catch (error) {
+      console.error('Failed to update seal:', error);
+      throw error;
+    }
+  },
 
-  enableSeal: (id) =>
-    set((state) => ({
-      seals: state.seals.map((seal) =>
-        seal.id === id
-          ? {
-              ...seal,
-              status: 'in_use' as SealStatus,
-              enableDate: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            }
-          : seal
-      ),
-    })),
+  enableSeal: async (id) => {
+    try {
+      const updated = await apiEnableSeal(id);
+      set((state) => ({
+        seals: state.seals.map((seal) =>
+          seal.id === id ? updated : seal
+        ),
+      }));
+    } catch (error) {
+      console.error('Failed to enable seal:', error);
+      throw error;
+    }
+  },
 
   getAvailableSealsByType: (sealType) => {
     const { seals } = get();
     return seals.filter(
-      (seal) => seal.sealType === sealType && (seal.status === 'stored' || seal.status === 'in_use')
+      (seal) => seal.sealType === sealType && isSealUsable(seal) && !isSealExpired(seal)
     );
   },
 
-  addRegistration: (registration) =>
-    set((state) => ({
-      registrations: [registration, ...state.registrations],
-    })),
+  addRegistration: async (registration) => {
+    try {
+      const created = await apiCreateRegistration({
+        applicationId: registration.applicationId,
+        sealId: registration.sealId,
+        registrarId: registration.registrarId,
+        registrarName: registration.registrarName,
+        registrant: registration.registrant,
+        registrantDepartment: registration.registrantDepartment,
+        usageTime: registration.usageTime,
+        photoEvidence: registration.photoEvidence,
+        remark: registration.remark,
+      });
+      set((state) => {
+        const registeredAppId = created.applicationId;
+        const updatedApplications = state.applications.map((app) =>
+          app.id === registeredAppId
+            ? { ...app, status: 'registered' as ApplicationStatus, sealId: created.sealId }
+            : app
+        );
+        return {
+          registrations: [created, ...state.registrations],
+          applications: updatedApplications,
+        };
+      });
+    } catch (error) {
+      console.error('Failed to create registration:', error);
+      throw error;
+    }
+  },
 
   getRegistrationById: (id) => get().registrations.find((reg) => reg.id === id),
 
@@ -271,4 +344,4 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 }));
 
-export type { ApplicationStatus, SealStatus, UrgencyLevel };
+

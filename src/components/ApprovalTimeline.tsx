@@ -1,6 +1,6 @@
 import { CheckCircle, XCircle, Send, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { ApprovalRecord } from '../../shared/types';
+import type { ApprovalRecord } from '@/shared/types';
 
 interface ApprovalTimelineProps {
   records: ApprovalRecord[];

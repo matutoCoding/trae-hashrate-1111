@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import dataStore from '../dataStore.js';
 import type { ApprovalRecord, ApplicationStatus, ApprovalNode } from '../../shared/types.js';
+import { getPreviousNode } from '../../shared/utils.js';
 
 const router = Router();
 
@@ -137,10 +138,12 @@ router.post('/:id/reject', (req: Request, res: Response): void => {
       timestamp: now,
     } as Omit<ApprovalRecord, 'id'>);
 
+    const previousNode = getPreviousNode(node as ApprovalNode);
+
     const existingTrail = application.approvalTrail || [];
     const updated = dataStore.update('applications', id, {
       status: 'rejected',
-      currentNode: node,
+      currentNode: previousNode,
       updatedAt: now,
       approvalTrail: [...existingTrail, approvalRecord],
     });

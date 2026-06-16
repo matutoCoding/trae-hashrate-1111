@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { useEffect } from "react";
 import Home from "@/pages/Home";
 import Dashboard from "@/pages/Dashboard";
 import ApplicationList from "@/pages/ApplicationList";
@@ -8,8 +9,15 @@ import SealList from "@/pages/SealList";
 import SealForm from "@/pages/SealForm";
 import RegistrationList from "@/pages/RegistrationList";
 import RegistrationForm from "@/pages/RegistrationForm";
+import { useAppStore } from "@/store";
 
 export default function App() {
+  const initFromApi = useAppStore((s) => s.initFromApi);
+
+  useEffect(() => {
+    initFromApi();
+  }, [initFromApi]);
+
   return (
     <Router>
       <Routes>

@@ -3,7 +3,8 @@ import { Search, Plus, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-r
 import { useAppStore } from '@/store';
 import StatusBadge from '@/components/StatusBadge';
 import { useNavigate } from 'react-router-dom';
-import type { SealStatus } from '../../shared/types';
+import type { Seal, SealStatus } from '@/shared/types';
+import { isSealExpired, isSealLocked } from '@/shared/utils';
 
 const PAGE_SIZE = 10;
 
@@ -120,9 +121,34 @@ export default function SealList() {
     setCurrentPage(1);
   };
 
-  const handleEnable = (sealId: string, currentStatus: SealStatus) => {
-    if (currentStatus !== 'stored') return;
-    enableSeal(sealId);
+  const getEarliestAvailableSealOfType = (sealType: string): Seal | undefined => {
+    return seals
+      .filter(
+        (s) =>
+          s.sealType === sealType &&
+          s.status === 'stored' &&
+          !isSealExpired(s) &&
+          !isSealLocked(s)
+      )
+      .sort(
+        (a, b) => new Date(a.receivedDate).getTime() - new Date(b.receivedDate).getTime()
+      )[0];
+  };
+
+  const isSealTheEarliestAvailable = (seal: Seal): boolean => {
+    if (seal.status !== 'stored') return true;
+    const earliest = getEarliestAvailableSealOfType(seal.sealType);
+    return !earliest || earliest.id === seal.id;
+  };
+
+  const handleEnable = (seal: Seal) => {
+    if (seal.status !== 'stored') return;
+    const earliest = getEarliestAvailableSealOfType(seal.sealType);
+    if (earliest && earliest.id !== seal.id) {
+      alert(`请先启用同类型更早入库的批次：${earliest.batchNumber}`);
+      return;
+    }
+    enableSeal(seal.id);
   };
 
   const handleCheckExpiry = () => {
@@ -302,12 +328,22 @@ export default function SealList() {
                       {seal.isExpired ? (
                         <span className="text-gray-400 cursor-not-allowed">启用</span>
                       ) : seal.status === 'stored' ? (
-                        <button
-                          onClick={() => handleEnable(seal.id, seal.status)}
-                          className="text-primary-600 hover:text-primary-700 font-medium"
-                        >
-                          启用
-                        </button>
+                        isSealTheEarliestAvailable(seal) ? (
+                          <button
+                            onClick={() => handleEnable(seal)}
+                            className="text-primary-600 hover:text-primary-700 font-medium"
+                          >
+                            启用
+                          </button>
+                        ) : (
+                          <button
+                            disabled
+                            title="请先启用更早入库的同类型批次"
+                            className="text-gray-400 cursor-not-allowed font-medium"
+                          >
+                            启用
+                          </button>
+                        )
                       ) : (
                         <span className="text-gray-400">—</span>
                       )}

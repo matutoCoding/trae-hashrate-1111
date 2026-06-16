@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import type { ApplicationStatus, SealStatus, UrgencyLevel } from '../../shared/types';
+import type { ApplicationStatus, SealStatus, UrgencyLevel } from '@/shared/types';
 
 interface StatusBadgeProps {
   status: ApplicationStatus | SealStatus | UrgencyLevel;
